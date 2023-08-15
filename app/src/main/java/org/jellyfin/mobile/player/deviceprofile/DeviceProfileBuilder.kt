@@ -1,9 +1,6 @@
 package org.jellyfin.mobile.player.deviceprofile
 
 import android.media.MediaCodecList
-import android.os.Build
-import androidx.annotation.RequiresApi
-import com.google.android.exoplayer2.util.MimeTypes
 import org.jellyfin.mobile.app.AppPreferences
 import org.jellyfin.mobile.utils.AndroidVersion
 import org.jellyfin.mobile.utils.Constants
@@ -15,7 +12,6 @@ import org.jellyfin.sdk.model.api.DlnaProfileType
 import org.jellyfin.sdk.model.api.SubtitleDeliveryMethod
 import org.jellyfin.sdk.model.api.SubtitleProfile
 import org.jellyfin.sdk.model.api.TranscodingProfile
-
 
 class DeviceProfileBuilder(
     private val appPreferences: AppPreferences,
@@ -118,17 +114,6 @@ class DeviceProfileBuilder(
         )
     }
 
-    @RequiresApi(Build.VERSION_CODES.Q)
-    fun canHardwareDecode(codec: String): Boolean {
-        var parsedCodec = codec
-        if (parsedCodec == "av1") parsedCodec = "av01"
-        val mimeType = MimeTypes.getMediaMimeType(parsedCodec) ?: return false
-        val hardwareCodec = MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos
-            .filter { it.isHardwareAccelerated }
-            .find { it.supportedTypes.contains(mimeType) }
-        return hardwareCodec != null
-    }
-
     fun getDeviceProfile(): DeviceProfile {
         val containerProfiles = ArrayList<ContainerProfile>()
         val directPlayProfiles = ArrayList<DirectPlayProfile>()
@@ -136,20 +121,18 @@ class DeviceProfileBuilder(
 
         for (i in SUPPORTED_CONTAINER_FORMATS.indices) {
             val container = SUPPORTED_CONTAINER_FORMATS[i]
-            val filteredVideoCodecs = supportedVideoCodecs[i].filter {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    canHardwareDecode(it)
-                } else {
-                    true
-                }
+            // TODO: allow software only codecs if specified
+            val videoCodecs = when {
+                true -> supportedHardwareVideoCodecs[i]
+                else -> supportedVideoCodecs[i]
             }
-            if (filteredVideoCodecs.isNotEmpty()) {
+            if (videoCodecs.isNotEmpty()) {
                 containerProfiles.add(ContainerProfile(type = DlnaProfileType.VIDEO, container = container))
                 directPlayProfiles.add(
                     DirectPlayProfile(
                         type = DlnaProfileType.VIDEO,
                         container = SUPPORTED_CONTAINER_FORMATS[i],
-                        videoCodec = filteredVideoCodecs.joinToString(","),
+                        videoCodec = videoCodecs.joinToString(","),
                         audioCodec = supportedAudioCodecs[i].joinToString(","),
                     ),
                 )
